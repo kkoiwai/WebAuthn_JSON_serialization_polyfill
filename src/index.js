@@ -1,4 +1,6 @@
-class base64url {
+import { UAParser } from "ua-parser-js";
+
+export class base64url {
   static encode(buffer) {
     const base64 = window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
     return base64.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
@@ -100,4 +102,77 @@ if (window.PublicKeyCredential) {
       }
     }
   }
+
+  if (!PublicKeyCredential.getClientCapabilities) {
+    PublicKeyCredential.getClientCapabilities = async () => {
+      let conditionalCreate = false;
+      let conditionalGet = false;
+      let hybridTransport = false;
+      let passkeyPlatformAuthenticator = false;
+      let userVerifyingPlatformAuthenticator = false;
+      let relatedOrigins = false;
+      let signalAllAcceptedCredentials = false;
+      let signalCurrentUserDetails = false;
+      let signalUnknownCredential = false;
+      if (PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable &&
+          PublicKeyCredential.isConditionalMediationAvailable) {
+        // Are UVPAA and conditional UI available on this browser?
+        const results = await Promise.all([
+          PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(),
+          PublicKeyCredential.isConditionalMediationAvailable()
+        ]);
+        userVerifyingPlatformAuthenticator = results[0];
+        conditionalGet = results[1];
+      }
+      if (PublicKeyCredential.signalAllAcceptedCredentials) {
+        signalAllAcceptedCredentials = true;
+      }
+      if (PublicKeyCredential.signalCurrentUserDetails) {
+        signalCurrentUserDetails = true;
+      }
+      if (PublicKeyCredential.signalUknownCredential) {
+        signalUnknownCredential = true;
+      }
+
+      const uap = new UAParser();
+      const browser = uap.getBrowser();
+      const browserName = browser.name;
+      const browserVer = parseInt(browser.major);
+      const engine = uap.getEngine();
+      const engineName = engine.name;
+      const engineVer = parseInt(engine.version.replace(/^([0-9]+)\.*$/, '$1'));
+
+      // `conditionalCreate` is `true` on Safari 15+
+      if (browserName === 'Safari' && browserVer >= 15) {
+        conditionalCreate = true;
+      }
+      // `hybridTransport` is `true` on Firefox 119+, Chromium 108+ and Safari 16+
+      // TODO: These version numbers may not be precise.
+      if ((engineName === 'Blink' && engineVer >= 108) ||
+          (browserName === 'Firefox' && browserVer >= 119) ||
+          (browserName === 'Safari' && browserVer >= 16)) {
+        hybridTransport = true;
+      } 
+      // `passkeyPlatformAuthenticator` is `true` if `hybridTransport` and `userVerifyingPlatformAuthenticator` are `true`.
+      if (hybridTransport && userVerifyingPlatformAuthenticator) {
+        passkeyPlatformAuthenticator = true;
+      }
+      // `relatedOrigins` is `true` on Chromium 128+
+      if ((engineName === 'Blink' && engineVer >= 128)) {
+        relatedOrigins = true;
+      }
+      return {
+        conditionalCreate,
+        conditionalGet,
+        hybridTransport,
+        passkeyPlatformAuthenticator,
+        userVerifyingPlatformAuthenticator,
+        relatedOrigins,
+        signalAllAcceptedCredentials,
+        signalCurrentUserDetails,
+        signalUnknownCredential
+      }
+    };
+  }
 }
+
